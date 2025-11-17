@@ -17,7 +17,7 @@ package com.cognizant.devops.platformservice.test.grafanaUser;
 
 import java.util.HashMap;
 import java.util.Map;
-import javax.servlet.http.Cookie;
+import jakarta.servlet.http.Cookie;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import com.google.gson.JsonElement;
 

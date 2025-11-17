@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformCommons/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformCommons/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformDAL/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformDAL/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformEngine/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformEngine/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformInsightsWebHook/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformInsightsWebHook/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformRegressionTest/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformRegressionTest/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformReports/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformReports/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformService/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformService/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformTestReport/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformTestReport/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformUI4/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformWorkflow/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/PlatformWorkflow/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

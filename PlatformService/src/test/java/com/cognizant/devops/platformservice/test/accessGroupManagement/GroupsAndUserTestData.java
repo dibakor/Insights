@@ -18,7 +18,7 @@ package com.cognizant.devops.platformservice.test.accessGroupManagement;
 
 import java.util.Base64;
 import java.util.Map;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.testng.AbstractTestNGSpringContextTests;
 import com.cognizant.devops.platformcommons.config.ApplicationConfigProvider;

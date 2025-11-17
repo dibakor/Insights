@@ -153,7 +153,7 @@ public class WebhookEngineTestData {
 				AWSSQSProvider.publish(routingKey, data);
 			else
 				publishRMQMessage(routingKey, data);
-		} catch (InsightsCustomException | JMSException e) {
+		} catch (InsightsCustomException | jakarta.jms.JMSException e) {
 			LOG.error(e.getMessage());
 		}
 	}

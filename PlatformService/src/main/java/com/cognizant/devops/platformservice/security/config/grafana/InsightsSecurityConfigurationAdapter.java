@@ -15,11 +15,7 @@
  ******************************************************************************/
 package com.cognizant.devops.platformservice.security.config.grafana;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-
-import javax.servlet.Filter;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -31,16 +27,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.ldap.DefaultSpringSecurityContextSource;
-import org.springframework.security.web.DefaultSecurityFilterChain;
-import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.cognizant.devops.platformcommons.config.ApplicationConfigProvider;
 import com.cognizant.devops.platformservice.security.config.AuthenticationUtils;
@@ -53,7 +50,6 @@ import com.cognizant.devops.platformservice.security.config.InsightsResponseHead
 @ComponentScan(basePackages = { "com.cognizant.devops" })
 @Configuration
 @EnableWebSecurity
-@Order(value = 1)
 @Conditional(InsightsNativeBeanInitializationCondition.class)
 public class InsightsSecurityConfigurationAdapter  {
 
@@ -68,50 +64,104 @@ public class InsightsSecurityConfigurationAdapter  {
 	DefaultSpringSecurityContextSource contextSource;
 
 	private static final String AUTH_TYPE = "NativeGrafana";
-	
+
 	@Bean
-	AuthenticationManager nativeAuthenticationManager(AuthenticationManagerBuilder auth) {
+	@Conditional(InsightsNativeBeanInitializationCondition.class)
+	AuthenticationManager nativeAuthenticationManager() throws Exception {
 		if (AUTH_TYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
 			log.debug("message Inside InsightsSecurityConfigurationAdapter, check authentication provider **** ");
 			ApplicationConfigProvider.performSystemCheck();
-			auth.authenticationProvider(new NativeInitialAuthenticationProvider());
 		}
-		return auth.getObject();
+		return new ProviderManager(Arrays.asList(new NativeInitialAuthenticationProvider()));
 	}
 
-
+	/**
+	 * SecurityFilterChain for /user/authenticate/** path
+	 * This chain handles initial Grafana authentication requests
+	 */
 	@Bean
-	 SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+	@Order(1)
+	@Conditional(InsightsNativeBeanInitializationCondition.class)
+	SecurityFilterChain grafanaAuthenticateFilterChain(HttpSecurity http) throws Exception {
+		if (AUTH_TYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
+			log.debug("Configuring filter chain for /user/authenticate/**");
+
+			http.securityMatcher("/user/authenticate/**")
+				.csrf(AbstractHttpConfigurer::disable)
+				.cors(AbstractHttpConfigurer::disable)
+				.addFilterBefore(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCrossScriptingFilter(), InsightsCustomCsrfFilter.class)
+				.addFilterAfter(insightsInitialProcessingFilter(), InsightsCrossScriptingFilter.class)
+				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+				.authorizeHttpRequests(authz -> authz.anyRequest().permitAll());
+		}
+		return http.build();
+	}
+
+	/**
+	 * SecurityFilterChain for /externalApi/** path
+	 * This chain handles external API authentication
+	 */
+	@Bean
+	@Order(2)
+	@Conditional(InsightsNativeBeanInitializationCondition.class)
+	SecurityFilterChain grafanaExternalApiFilterChain(HttpSecurity http) throws Exception {
+		if (AUTH_TYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
+			log.debug("Configuring filter chain for /externalApi/**");
+
+			http.securityMatcher("/externalApi/**")
+				.csrf(AbstractHttpConfigurer::disable)
+				.cors(AbstractHttpConfigurer::disable)
+				.addFilterBefore(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCrossScriptingFilter(), InsightsCustomCsrfFilter.class)
+				.addFilterAfter(insightsExternalProcessingFilter(), InsightsCrossScriptingFilter.class)
+				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+				.authorizeHttpRequests(authz -> authz.anyRequest().permitAll());
+		}
+		return http.build();
+	}
+
+	/**
+	 * Main SecurityFilterChain for all other requests (/**)
+	 * This is the default chain with full security configuration
+	 */
+	@Bean
+	@Order(3)
+	@Conditional(InsightsNativeBeanInitializationCondition.class)
+	SecurityFilterChain grafanaMainFilterChain(HttpSecurity http) throws Exception {
 		log.debug("message Inside InsightsSecurityConfigurationAdapter ,HttpSecurity **** {} ",
 				ApplicationConfigProvider.getInstance().getAutheticationProtocol());
-	
+
 		if (AUTH_TYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
 			log.debug("message Inside InsightsSecurityConfigurationAdapter,HttpSecurity check **** ");
-			
-			http.cors();
-			
-			List<AntPathRequestMatcher> antMatchers = new ArrayList<>();
-            AuthenticationUtils.CSRF_IGNORE.forEach(str ->antMatchers.add(new AntPathRequestMatcher(str)));
-            http.csrf().ignoringRequestMatchers(antMatchers.toArray(new AntPathRequestMatcher[0])).csrfTokenRepository(authenticationUtils.csrfTokenRepository());
-					
-			http.exceptionHandling().accessDeniedHandler(springAccessDeniedHandler); 
-			http.headers().xssProtection().and().contentSecurityPolicy("script-src 'self'");
-			
-			http
-			.addFilterAfter(insightsFilter(), BasicAuthenticationFilter.class)
-			.addFilterAfter(new InsightsResponseHeaderWriterFilter(), BasicAuthenticationFilter.class);
-			
-			http.headers().frameOptions().sameOrigin();
-			
-			http.anonymous().disable().authorizeHttpRequests()
-			.requestMatchers(new AntPathRequestMatcher("/datasources/**")).permitAll()
-			.requestMatchers(new AntPathRequestMatcher("/datasource/**")).permitAll()
-			.requestMatchers(new AntPathRequestMatcher("/admin/**")).hasAuthority("Admin")
-			.requestMatchers(new AntPathRequestMatcher("/traceability/**")).hasAuthority("hasAuthority('Admin')")
-			.requestMatchers(new AntPathRequestMatcher("/configure/loadConfigFromResources")).permitAll()
-			.anyRequest().authenticated();
-			
-			http.logout().logoutSuccessUrl("/");
+
+			http.cors(Customizer.withDefaults());
+
+			http.csrf(csrf -> csrf
+				.ignoringRequestMatchers(AuthenticationUtils.CSRF_IGNORE.toArray(new String[0]))
+				.csrfTokenRepository(authenticationUtils.csrfTokenRepository()));
+
+			http.exceptionHandling(exceptions -> exceptions.accessDeniedHandler(springAccessDeniedHandler));
+			http.headers(headers -> headers
+				.xssProtection(xss -> xss.headerValue(org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
+				.contentSecurityPolicy(csp -> csp.policyDirectives("script-src 'self'"))
+				.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin));
+
+			// Add custom security filters
+			http.addFilterBefore(new InsightsCrossScriptingFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(insightsProcessingFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.header.HeaderWriterFilter.class);
+
+			http.anonymous(AbstractHttpConfigurer::disable)
+				.authorizeHttpRequests(authz -> authz
+					.requestMatchers("/datasources/**").permitAll()
+					.requestMatchers("/datasource/**").permitAll()
+					.requestMatchers("/admin/**").hasAuthority("Admin")
+					.requestMatchers("/traceability/**").hasAuthority("Admin")
+					.requestMatchers("/configure/loadConfigFromResources").permitAll()
+					.anyRequest().authenticated());
+
+			http.logout(logout -> logout.logoutSuccessUrl("/"));
 		}
 		return http.build();
 	}
@@ -122,53 +172,13 @@ public class InsightsSecurityConfigurationAdapter  {
 	 @Bean
 	    public WebSecurityCustomizer webSecurityCustomizer() {
 	        return (web) -> web.ignoring()
-	        		.requestMatchers(new AntPathRequestMatcher("/datasource/**"));
+	        		.requestMatchers("/datasource/**");
 	  }
 	
-	/**
-	 * Used to add necessary filter for Grafana Authentication
-	 * 
-	 * @return
-	 * @throws Exception
-	 */
-	
-	@Conditional(InsightsNativeBeanInitializationCondition.class)
-	public FilterChainProxy insightsFilter() throws Exception {
-		log.debug("message Inside FilterChainProxy, initial bean InsightsSecurityConfigurationAdapter **** ");
-		
-		List<Filter> filterlogin = new ArrayList<>();
-		filterlogin.add(0, new InsightsCustomCsrfFilter());
-		filterlogin.add(1, new InsightsCrossScriptingFilter());
-		filterlogin.add(2, insightsInitialProcessingFilter());
-		filterlogin.add(3, new InsightsResponseHeaderWriterFilter());
-		
-		List<SecurityFilterChain> securityFilterchains = new ArrayList<>();
-		securityFilterchains.add(
-				new DefaultSecurityFilterChain(new AntPathRequestMatcher("/user/authenticate/**"), filterlogin));
-		
-		List<Filter> filtersExteranl = new ArrayList<>();
-		filtersExteranl.add(0, new InsightsCustomCsrfFilter());
-		filtersExteranl.add(1, new InsightsCrossScriptingFilter());
-		filtersExteranl.add(2, insightsExternalProcessingFilter());
-		filtersExteranl.add(3, new InsightsResponseHeaderWriterFilter());
-		
-		securityFilterchains.add(
-				new DefaultSecurityFilterChain(new AntPathRequestMatcher("/externalApi/**"), filtersExteranl));
-		
-		List<Filter> filtersohter = new ArrayList<>();
-		filtersohter.add(0, new InsightsCustomCsrfFilter());
-		filtersohter.add(1, new InsightsCrossScriptingFilter());
-		filtersohter.add(2, insightsProcessingFilter());
-		filtersohter.add(3, new InsightsResponseHeaderWriterFilter());
-		
-		securityFilterchains.add(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/**"), filtersohter));
-
-		return new FilterChainProxy(securityFilterchains);
-	}
 	
 	/**
 	 * Used to configure authentication Filter for all Request Matcher
-	 * 
+	 *
 	 * @return
 	 * @throws Exception
 	 */
@@ -198,5 +208,20 @@ public class InsightsSecurityConfigurationAdapter  {
 	 */
 	protected AuthenticationManager authenticationInitialManager()  {
 		return new ProviderManager(Arrays.asList(new NativeInitialAuthenticationProvider()));
+	}
+
+	/**
+	 * Configure CORS for Spring Security 6
+	 */
+	//@Bean
+	public CorsConfigurationSource corsConfigurationSource() {
+		CorsConfiguration configuration = new CorsConfiguration();
+		configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+		configuration.setAllowedMethods(Arrays.asList("*"));
+		configuration.setAllowedHeaders(Arrays.asList("*"));
+		configuration.setAllowCredentials(true);
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/**", configuration);
+		return source;
 	}
 }

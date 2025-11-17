@@ -49,9 +49,13 @@ public class WorkflowTaskPublisherFactory {
 	public static void publish(String routingKey, String data) throws InsightsCustomException, IOException, TimeoutException, JMSException {
 		LOG.info("inside workflow task publish");
 		String mqProviderName = ApplicationConfigProvider.getInstance().getMessageQueue().getProviderName();
-		if (mqProviderName.equalsIgnoreCase("AWSSQS"))
-			AWSSQSProvider.publish(routingKey, data);
-		else {
+		if (mqProviderName.equalsIgnoreCase("AWSSQS")) {
+			try {
+				AWSSQSProvider.publish(routingKey, data);
+			} catch (jakarta.jms.JMSException e) {
+				throw new JMSException(e.getMessage());
+			}
+		} else {
 			RabbitMQProvider.publish(routingKey, data);
 		}
 	}

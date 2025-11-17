@@ -15,11 +15,7 @@
  ******************************************************************************/
 package com.cognizant.devops.platformservice.security.config.jwt;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-
-import javax.servlet.Filter;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -31,18 +27,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.ldap.DefaultSpringSecurityContextSource;
-import org.springframework.security.web.DefaultSecurityFilterChain;
-import org.springframework.security.web.FilterChainProxy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import com.cognizant.devops.platformcommons.config.ApplicationConfigProvider;
 import com.cognizant.devops.platformservice.security.config.AuthenticationUtils;
@@ -56,7 +47,6 @@ import com.cognizant.devops.platformservice.security.config.grafana.SpringAccess
 @ComponentScan(basePackages = { "com.cognizant.devops" })
 @Configuration
 @EnableWebSecurity
-@Order(value = 4)
 @Conditional(InsightsJWTBeanInitializationCondition.class)
 public class InsightsSecurityConfigurationAdapterJWT {
 
@@ -73,48 +63,99 @@ public class InsightsSecurityConfigurationAdapterJWT {
 	static final String AUTHTYPE = "JWT";
 
 	@Bean
-	AuthenticationManager nativeAuthenticationManager(AuthenticationManagerBuilder auth) {
+	@Conditional(InsightsJWTBeanInitializationCondition.class)
+	AuthenticationManager nativeAuthenticationManager() throws Exception {
 		log.debug("message Inside InsightsSecurityConfigurationAdapterJWT, AuthenticationManagerBuilder **** {} ",
 				ApplicationConfigProvider.getInstance().getAutheticationProtocol());
 		if (AUTHTYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
 			log.debug("message Inside InsightsSecurityConfigurationAdapter, check authentication provider **** ");
 			ApplicationConfigProvider.performSystemCheck();
-			auth.authenticationProvider(jwtAuthenticationProvider());
 		}
-		return auth.getObject();
+		return new ProviderManager(Arrays.asList(jwtAuthenticationProvider()));
 	}
 
-
+	/**
+	 * SecurityFilterChain for /user/insightsso/** path
+	 * This chain handles initial JWT SSO authentication requests
+	 */
 	@Bean
-	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+	@Order(4)
+	@Conditional(InsightsJWTBeanInitializationCondition.class)
+	SecurityFilterChain jwtSsoFilterChain(HttpSecurity http) throws Exception {
+		if (AUTHTYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
+			log.debug("Configuring filter chain for /user/insightsso/**");
+
+			http.securityMatcher("/user/insightsso/**")
+				.csrf(org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer::disable)
+				.addFilterBefore(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCrossScriptingFilter(), InsightsCustomCsrfFilter.class)
+				.addFilterAfter(insightsInitialJWTProcessingFilter(), InsightsCrossScriptingFilter.class)
+				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+				.authorizeHttpRequests(authz -> authz.anyRequest().permitAll());
+		}
+		return http.build();
+	}
+
+	/**
+	 * SecurityFilterChain for /externalApi/** path
+	 * This chain handles external API authentication
+	 */
+	@Bean
+	@Order(5)
+	@Conditional(InsightsJWTBeanInitializationCondition.class)
+	SecurityFilterChain jwtExternalApiFilterChain(HttpSecurity http) throws Exception {
+		if (AUTHTYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
+			log.debug("Configuring filter chain for /externalApi/**");
+
+			http.securityMatcher("/externalApi/**")
+				.csrf(org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer::disable)
+				.addFilterBefore(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCrossScriptingFilter(), InsightsCustomCsrfFilter.class)
+				.addFilterAfter(insightsExternalProcessingFilter(), InsightsCrossScriptingFilter.class)
+				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+				.authorizeHttpRequests(authz -> authz.anyRequest().permitAll());
+		}
+		return http.build();
+	}
+
+	/**
+	 * Main SecurityFilterChain for all other requests (/**)
+	 * This is the default chain with full security configuration
+	 */
+	@Bean
+	@Order(6)
+	@Conditional(InsightsJWTBeanInitializationCondition.class)
+	SecurityFilterChain jwtMainFilterChain(HttpSecurity http) throws Exception {
 		log.debug("message Inside InsightsSecurityConfigurationAdapterJWT ,HttpSecurity **** {} ",
 				ApplicationConfigProvider.getInstance().getAutheticationProtocol());
 		if (AUTHTYPE.equalsIgnoreCase(ApplicationConfigProvider.getInstance().getAutheticationProtocol())) {
 			log.debug("message Inside InsightsSecurityConfigurationAdapter,HttpSecurity check **** ");
 
-			List<AntPathRequestMatcher> antMatchers = new ArrayList<>();
-            AuthenticationUtils.CSRF_IGNORE.forEach(str ->antMatchers.add(new AntPathRequestMatcher(str)));
-            http.csrf().ignoringRequestMatchers(antMatchers.toArray(new AntPathRequestMatcher[0])).csrfTokenRepository(authenticationUtils.csrfTokenRepository());
-			
-			http.exceptionHandling().accessDeniedHandler(springAccessDeniedHandler);
+			http.csrf(csrf -> csrf
+				.ignoringRequestMatchers(AuthenticationUtils.CSRF_IGNORE.toArray(new String[0]))
+				.csrfTokenRepository(authenticationUtils.csrfTokenRepository()));
 
-			http.addFilterAfter(insightsFilter(), BasicAuthenticationFilter.class);
-			http.headers().addHeaderWriter(new StaticHeadersWriter("X-FRAME-OPTIONS", "ALLOW-FROM "
-					+ApplicationConfigProvider.getInstance().getSingleSignOnConfig().getJwtTokenOriginServerURL()));
-			http.sessionManagement().maximumSessions(1).and() // sameOrigin()
-					.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);
-			
-			http.anonymous().disable().authorizeHttpRequests()
-			.requestMatchers(new AntPathRequestMatcher("/datasources/**")).permitAll()
-			.requestMatchers(new AntPathRequestMatcher("/datasource/**")).permitAll()
-			.requestMatchers(new AntPathRequestMatcher("/admin/**")).hasAuthority("Admin")
-			.requestMatchers(new AntPathRequestMatcher("/traceability/**")).hasAuthority("hasAuthority('Admin')")
-			.requestMatchers(new AntPathRequestMatcher("/configure/loadConfigFromResources")).permitAll()
-			.anyRequest().authenticated()
-			.and().exceptionHandling().accessDeniedHandler(springAccessDeniedHandler);
-			
+			http.exceptionHandling(exceptions -> exceptions.accessDeniedHandler(springAccessDeniedHandler));
 
-			
+			// Add custom security filters
+			http.addFilterBefore(new InsightsCrossScriptingFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(insightsJWTProcessingFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.header.HeaderWriterFilter.class);
+
+			http.headers(headers -> headers.addHeaderWriter(new StaticHeadersWriter("X-FRAME-OPTIONS", "ALLOW-FROM "
+					+ApplicationConfigProvider.getInstance().getSingleSignOnConfig().getJwtTokenOriginServerURL())));
+			http.sessionManagement(session -> session
+					.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+					.maximumSessions(1));
+
+			http.anonymous(anonymous -> anonymous.disable())
+				.authorizeHttpRequests(authz -> authz
+					.requestMatchers("/datasources/**").permitAll()
+					.requestMatchers("/datasource/**").permitAll()
+					.requestMatchers("/admin/**").hasAuthority("Admin")
+					.requestMatchers("/traceability/**").hasAuthority("Admin")
+					.requestMatchers("/configure/loadConfigFromResources").permitAll()
+					.anyRequest().authenticated());
 		}
 		return http.build();
 	}
@@ -126,66 +167,27 @@ public class InsightsSecurityConfigurationAdapterJWT {
 	 @Conditional(InsightsJWTBeanInitializationCondition.class)
 	    public WebSecurityCustomizer webSecurityCustomizer() {
 	        return (web) -> web.ignoring()
-	        		.requestMatchers(new AntPathRequestMatcher("/datasource/**"));
+	        		.requestMatchers("/datasource/**");
 	  }
 	
 
-	/**
-	 * Used to add necessary filter for JWT Authentication
-	 * 
-	 * @return
-	 * @throws Exception
-	 */
-	@Conditional(InsightsJWTBeanInitializationCondition.class)
-	public FilterChainProxy insightsFilter() throws Exception {
-		log.debug("message Inside FilterChainProxy, initial bean InsightsSecurityConfigurationAdapterJWT **** ");
-
-		List<Filter> filters = new ArrayList<>();
-		filters.add(0, new InsightsCustomCsrfFilter());
-		filters.add(1, new InsightsCrossScriptingFilter());
-		filters.add(2, insightsInitialJWTProcessingFilter());
-		filters.add(3, new InsightsResponseHeaderWriterFilter());
-
-		AuthenticationUtils.setSecurityFilterchain(
-				new DefaultSecurityFilterChain(new AntPathRequestMatcher("/user/insightsso/**"), filters));// chains.add
-		
-		List<Filter> filtersexternal = new ArrayList<>();
-		filtersexternal.add(0, new InsightsCustomCsrfFilter());
-		filtersexternal.add(1, new InsightsCrossScriptingFilter());
-		filtersexternal.add(2, insightsExternalProcessingFilter());
-		filtersexternal.add(3, new InsightsResponseHeaderWriterFilter());
-		
-		AuthenticationUtils.setSecurityFilterchain(new DefaultSecurityFilterChain(
-				new AntPathRequestMatcher("/externalApi/**"), insightsExternalProcessingFilter()));
-
-		List<Filter> filtersohter = new ArrayList<>();
-		filtersohter.add(0, new InsightsCustomCsrfFilter());
-		filtersohter.add(1, new InsightsCrossScriptingFilter());
-		filtersohter.add(2, insightsJWTProcessingFilter());
-		filtersohter.add(3, new InsightsResponseHeaderWriterFilter());
-
-		AuthenticationUtils
-				.setSecurityFilterchain(new DefaultSecurityFilterChain(new AntPathRequestMatcher("/**"), filtersohter));// chains.add
-
-		return new FilterChainProxy(AuthenticationUtils.getSecurityFilterchains());
-	}
 
 	/**
 	 * Used to configure authentication Filter for all Request Matcher
-	 * 
+	 *
 	 * @return
 	 * @throws Exception
 	 */
-	public InsightsAuthenticationFilter insightsJWTProcessingFilter() {
-		InsightsAuthenticationFilter filter = new InsightsAuthenticationFilter("/**");
+	public InsightsAuthenticationFilter insightsJWTProcessingFilter() throws Exception {
+		InsightsAuthenticationFilter filter = new InsightsAuthenticationFilter("/**", nativeAuthenticationManager());
 		return filter;
 	}
 	
-	/** This is use to validate Initial API Request 
+	/** This is use to validate Initial API Request
 	 * @return
 	 */
 	public InsightsAuthenticationFilter insightsInitialJWTProcessingFilter() throws Exception {
-		InsightsAuthenticationFilter filter = new InsightsAuthenticationFilter("/user/insightsso/**");
+		InsightsAuthenticationFilter filter = new InsightsAuthenticationFilter("/user/insightsso/**", nativeAuthenticationManager());
 		return filter;
 	}
 

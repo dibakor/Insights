@@ -40,7 +40,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.jms.JMSException;
+import jakarta.jms.JMSException;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.FileUtils;
@@ -610,7 +610,7 @@ public class AgentManagementServiceImpl implements AgentManagementService {
 	}
 
 	private void sendAgentPackage(byte[] data, String action, String fileName, String agentId, String toolName,
-			String osversion) throws IOException, TimeoutException, InsightsCustomException, JMSException {
+			String osversion) throws IOException, TimeoutException, InsightsCustomException, jakarta.jms.JMSException {
 		String agentDaemonQueueName = ApplicationConfigProvider.getInstance().getAgentDetails().getAgentPkgQueue();
 		JsonObject json = new JsonObject();
 		json.addProperty("fileName", fileName);
@@ -623,7 +623,7 @@ public class AgentManagementServiceImpl implements AgentManagementService {
 	}
 
 	private void uninstallAgent(String action, String agentId, String toolName, String osversion)
-			throws IOException, TimeoutException, InsightsCustomException, JMSException {
+			throws IOException, TimeoutException, InsightsCustomException, jakarta.jms.JMSException {
 		String agentDaemonQueueName = ApplicationConfigProvider.getInstance().getAgentDetails().getAgentPkgQueue();
 		JsonObject json = new JsonObject();
 		json.addProperty(AgentCommonConstant.OSTYPE, osversion);
@@ -634,7 +634,7 @@ public class AgentManagementServiceImpl implements AgentManagementService {
 	}
 
 	private void performAgentAction(String agentId, String toolName, String osversion, String action, String queueName)
-			throws TimeoutException, IOException, InsightsCustomException, JMSException {
+			throws TimeoutException, IOException, InsightsCustomException, jakarta.jms.JMSException {
 		JsonObject json = new JsonObject();
 		json.addProperty(AgentCommonConstant.OSTYPE, osversion);
 		json.addProperty(AgentCommonConstant.AGENT_TOOL_NAME, toolName);
@@ -645,7 +645,7 @@ public class AgentManagementServiceImpl implements AgentManagementService {
 
 
 	private void publishAgentAction(String routingKey, JsonObject json)
-			throws IOException, InsightsCustomException, TimeoutException, JMSException {
+			throws IOException, InsightsCustomException, TimeoutException, jakarta.jms.JMSException {
 		String queueName = routingKey.replace(".", "_");
 		if (this.mqProviderName.equalsIgnoreCase("AWSSQS"))
 			AWSSQSProvider.publish(queueName, json.toString());
