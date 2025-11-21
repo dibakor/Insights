@@ -18,6 +18,7 @@ package com.cognizant.devops.engines.platformengine.message.factory;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
+import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.TextMessage;
 
@@ -40,7 +41,7 @@ public abstract class EngineSubscriberResponseHandler {
 	private EngineSubscriberResponseHandler responseHandler;
 
 	public EngineSubscriberResponseHandler(String routingKey)
-			throws InterruptedException, javax.jms.JMSException, IOException, InsightsCustomException {
+			throws InterruptedException, JMSException, IOException, InsightsCustomException {
 		responseHandler = this;
 
 		MessageFactory msgFactory;
@@ -70,23 +71,19 @@ public abstract class EngineSubscriberResponseHandler {
 		}
 	}
 
-	public void onMessage(String routingKey, Message message) throws javax.jms.JMSException, InsightsCustomException {
+	public void onMessage(String routingKey, Message message) throws JMSException, InsightsCustomException {
 		String msgBody = ((TextMessage) message).getText();
 		try {
 			log.debug("Received: {} ", msgBody);
 			handleDelivery(routingKey, msgBody);
 			message.acknowledge();
-		} catch (ProcessingException | javax.jms.JMSException e) {
+		} catch (ProcessingException | JMSException e) {
 			log.error(e);
 		} catch (Exception e) {
 			log.error(e);
 			if (ApplicationConfigProvider.getInstance().getMessageQueue().isEnableDeadLetterExchange()) {
-				try {
-					AWSSQSProvider.publishInDLQ(routingKey, msgBody);
-					message.acknowledge();
-				} catch (Exception jmsEx) {
-					log.error("Failed to publish to DLQ", jmsEx);
-				}
+				AWSSQSProvider.publishInDLQ(routingKey, msgBody);
+				message.acknowledge();
 			}
 		}
 	}

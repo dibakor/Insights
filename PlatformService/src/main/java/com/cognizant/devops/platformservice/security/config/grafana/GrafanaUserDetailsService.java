@@ -15,12 +15,11 @@
  ******************************************************************************/
 package com.cognizant.devops.platformservice.security.config.grafana;
 
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -33,11 +32,7 @@ public class GrafanaUserDetailsService implements UserDetailsService {
 
 	@Autowired
 	private HttpServletRequest request;
-
-    @Autowired
-    @Qualifier("passwordEncoderGrafana")
-    private BCryptPasswordEncoder encoder;
-
+	
 	/**
 	 * used to loads user-specific data.
 	 *
@@ -45,6 +40,7 @@ public class GrafanaUserDetailsService implements UserDetailsService {
 	@Override
 	public UserDetails loadUserByUsername(String login) {
 		log.debug(" In GrafanaUserDetailsService Grafana ...... ");
+		BCryptPasswordEncoder encoder = passwordEncoderGrafana();
 		UserDetails user = GrafanaUserDetailsUtil.getUserDetails(request);
 		return new org.springframework.security.core.userdetails.User(user.getUsername(),
 				encoder.encode(user.getPassword()), user.getAuthorities());

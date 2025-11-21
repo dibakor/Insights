@@ -15,37 +15,21 @@
  ******************************************************************************/
 package com.cognizant.devops.platformservice.security.config;
 
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-
-import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
-import org.apache.hc.client5.http.io.HttpClientConnectionManager;
-import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactoryBuilder;
-import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.multipart.support.StandardServletMultipartResolver;
+import org.springframework.web.multipart.commons.CommonsMultipartResolver;
 
 import com.cognizant.devops.platformcommons.config.ApplicationConfigProvider;
 
@@ -89,7 +73,10 @@ public class CommonBeanConfiguration {
 	public CorsConfigurationSource corsConfigurationSource() {
 		LOG.debug("Setting up corsConfigurationSource ");
 		CorsConfiguration configuration = new CorsConfiguration();
-        List<String> allowedOriginHost = new ArrayList<>(ApplicationConfigProvider.getInstance().getTrustedHosts());
+		List<String> allowedOriginHost = new ArrayList<>();
+		for (String hostName : ApplicationConfigProvider.getInstance().getTrustedHosts()) {
+			allowedOriginHost.add(hostName);
+		}
 		LOG.debug("Setting up corsConfigurationSource, Allow Origin host are {} ", allowedOriginHost);
 		configuration.setAllowedOrigins(allowedOriginHost);
 		configuration.setAllowedMethods(Arrays.asList("GET", "POST", "OPTIONS", "PUT", "DELETE", "PATCH"));
@@ -104,78 +91,15 @@ public class CommonBeanConfiguration {
 	 * used for initialization of MultipartResolver ,MultipartResolver check files
 	 * in our application it apply before initialization. It restrict any unwanted
 	 * file attact in our application.
-	 *
+	 * 
 	 * @return
 	 */
 	@Bean(name = "filterMultipartResolver")
-	public StandardServletMultipartResolver multipartResolver() {
+	public CommonsMultipartResolver multipartResolver() {
 		LOG.debug(" In multipartResolver ");
-		StandardServletMultipartResolver resolver = new StandardServletMultipartResolver();
+		CommonsMultipartResolver resolver = new CommonsMultipartResolver();
+		resolver.setDefaultEncoding("utf-8");
+		resolver.setMaxUploadSize(2197152);
 		return resolver;
-	}
-
-	/**
-	 * Configure RestTemplate with SSL context that bypasses certificate validation
-	 * ONLY for development/testing environments - NOT for production
-	 *
-	 * @return RestTemplate configured with custom HTTP client
-	 */
-	@Bean
-	@Profile({"dev", "test", "local", "!prod"})
-	public RestTemplate restTemplateInsecure() {
-		try {
-			// Create a trust manager that accepts all certificates
-			TrustManager[] trustAllCerts = new TrustManager[] {
-				new X509TrustManager() {
-					@Override
-					public X509Certificate[] getAcceptedIssuers() { return null; }
-					@Override
-					public void checkClientTrusted(X509Certificate[] certs, String authType) { }
-					@Override
-					public void checkServerTrusted(X509Certificate[] certs, String authType) { }
-				}
-			};
-
-			// Create SSL context that uses our custom trust manager
-			SSLContext sslContext = SSLContext.getInstance("TLS");
-			sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-
-			// Create HTTP client connection manager with custom SSL context
-			HttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder
-				.create()
-				.setSSLSocketFactory(SSLConnectionSocketFactoryBuilder
-					.create()
-					.setSslContext(sslContext)
-					.setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-					.build())
-				.build();
-
-			// Create HTTP client with custom connection manager
-			org.apache.hc.client5.http.classic.HttpClient httpClient = HttpClients.custom()
-				.setConnectionManager(connectionManager)
-				.build();
-
-			// Create request factory with custom HTTP client
-			HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-			requestFactory.setHttpClient(httpClient);
-
-			return new RestTemplate(requestFactory);
-		} catch (Exception e) {
-			LOG.error("Error configuring RestTemplate with custom SSL context", e);
-			return new RestTemplate();
-		}
-	}
-
-	/**
-	 * Configure secure RestTemplate for production environments
-	 * Uses default SSL certificate validation
-	 *
-	 * @return RestTemplate with default SSL validation
-	 */
-	@Bean
-	@Profile("prod")
-	public RestTemplate restTemplate() {
-		LOG.info("Creating secure RestTemplate for production environment");
-		return new RestTemplate();
 	}
 }

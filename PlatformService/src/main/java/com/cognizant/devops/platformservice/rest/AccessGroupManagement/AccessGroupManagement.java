@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -107,7 +107,7 @@ public class AccessGroupManagement {
 	}
 
 	@PostMapping(value = "/searchUser", produces = MediaType.APPLICATION_JSON_VALUE)
-	public  JsonObject searchUser(@RequestBody String reqname) {
+	public @ResponseBody JsonObject searchUser(@RequestBody String reqname) {
 		try {
 			String name = ValidationUtils.validateRequestBody(reqname);
 
@@ -131,7 +131,7 @@ public class AccessGroupManagement {
 	}
 
 	@PostMapping(value = "/assignUser", produces = MediaType.APPLICATION_JSON_VALUE)
-	public  JsonObject assignUser(@RequestBody String reqassignUserdata) {
+	public @ResponseBody JsonObject assignUser(@RequestBody String reqassignUserdata) {
 		String message = " ";
 		try {
 
@@ -208,7 +208,7 @@ public class AccessGroupManagement {
 	}
 
 	@PostMapping(value = "/addUserInOrg", produces = MediaType.APPLICATION_JSON_VALUE)
-	public  JsonObject addUser(@RequestBody String requserPropertyList) {
+	public @ResponseBody JsonObject addUser(@RequestBody String requserPropertyList) {
 		String message = null;
 		try {
 			String genkey = UUID.randomUUID().toString();

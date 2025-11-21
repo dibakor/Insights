@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.cognizant.devops.platformservice.security.config;
 
-import jakarta.servlet.ServletContext;
+import javax.servlet.ServletContext;
 
 import org.springframework.security.web.context.AbstractSecurityWebApplicationInitializer;
 import org.springframework.web.multipart.support.MultipartFilter;
