@@ -19,11 +19,16 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.http.HttpMessageConvertersAutoConfiguration;
+import org.springframework.boot.autoconfigure.ldap.LdapAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.client.HttpClientAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.client.RestTemplateAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration;
 
 import com.cognizant.devops.platformservice.config.LoadServerConfig;
 
-@SpringBootApplication(exclude = {ErrorMvcAutoConfiguration.class})
+@SpringBootApplication(exclude = {ErrorMvcAutoConfiguration.class, RestTemplateAutoConfiguration.class, HttpMessageConvertersAutoConfiguration.class, HttpClientAutoConfiguration.class, LdapAutoConfiguration.class, RestClientAutoConfiguration.class})
 public class PlatformServiceApplication {
 	
 	static Logger log = LogManager.getLogger(PlatformServiceApplication.class.getName());

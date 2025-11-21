@@ -23,8 +23,8 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import javax.annotation.Resource;
-import javax.servlet.http.Cookie;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.Cookie;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

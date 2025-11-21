@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.cognizant.devops.platforminsightswebhook.application;
 
-import javax.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServlet;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

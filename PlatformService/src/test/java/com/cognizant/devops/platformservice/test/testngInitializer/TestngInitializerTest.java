@@ -15,8 +15,8 @@
  *******************************************************************************/
 package com.cognizant.devops.platformservice.test.testngInitializer;
 
-import javax.annotation.Resource;
-import javax.servlet.ServletException;
+import jakarta.annotation.Resource;
+import jakarta.servlet.ServletException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

@@ -197,8 +197,12 @@ public abstract class WorkflowTaskSubscriberHandler {
 		} catch (Exception e) {
 			log.error(e);
 			if (ApplicationConfigProvider.getInstance().getMessageQueue().isEnableDeadLetterExchange()) {
-				AWSSQSProvider.publishInDLQ(routingKey, msgBody);
-				message.acknowledge();
+				try {
+					AWSSQSProvider.publishInDLQ(routingKey, msgBody);
+					message.acknowledge();
+				} catch (Exception jmsEx) {
+					log.error("Failed to publish to DLQ", jmsEx);
+				}
 			}
 		}
 	}

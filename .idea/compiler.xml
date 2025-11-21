@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="PlatformService" />
+        <module name="PlatformReports" />
+        <module name="PlatformCommons" />
+        <module name="PlatformDAL" />
+        <module name="PlatformUI4" />
+        <module name="PlatformTestReport" />
+        <module name="PlatformEngine" />
+        <module name="PlatformInsightsWebHook" />
+        <module name="PlatformRegressionTest" />
+        <module name="PlatformWorkflow" />
+      </profile>
+    </annotationProcessing>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="PlatformCommons" options="-parameters" />
+      <module name="PlatformDAL" options="-parameters" />
+      <module name="PlatformEngine" options="-parameters" />
+      <module name="PlatformInsightsWebHook" options="-parameters" />
+      <module name="PlatformParent" options="-parameters" />
+      <module name="PlatformRegressionTest" options="-parameters" />
+      <module name="PlatformReports" options="-parameters" />
+      <module name="PlatformService" options="-parameters" />
+      <module name="PlatformTestReport" options="-parameters" />
+      <module name="PlatformUI4" options="-parameters" />
+      <module name="PlatformWorkflow" options="-parameters" />
+    </option>
+  </component>
+</project>

@@ -49,8 +49,12 @@ public class MessageAWSSubsbriberFactory extends MessageFactory {
 			}
 		};
 
-		localconnection = AWSSQSProvider.registerListner(routingKey, listner);
-		localconnection.start();
+		try {
+			localconnection = AWSSQSProvider.registerListner(routingKey, listner);
+			localconnection.start();
+		} catch (Exception e) {
+			throw new JMSException(e.getMessage());
+		}
 	}
 
 }
