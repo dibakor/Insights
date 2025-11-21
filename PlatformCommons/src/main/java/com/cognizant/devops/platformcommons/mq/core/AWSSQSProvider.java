@@ -18,6 +18,7 @@ package com.cognizant.devops.platformcommons.mq.core;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.jms.JMSException;
 import javax.jms.MessageConsumer;
 import javax.jms.MessageListener;
 import javax.jms.MessageProducer;
@@ -86,23 +87,21 @@ public class AWSSQSProvider {
 
 	}
 
-	public static SQSConnection getSQSConnectionFromFactory() throws InsightsCustomException, jakarta.jms.JMSException {
-		try {
-			return AWSSQSProvider.getConnectionFactory().createConnection();
-		} catch (javax.jms.JMSException e) {
-			throw new jakarta.jms.JMSException(e.getMessage());
-		}
+	public static SQSConnection getSQSConnectionFromFactory() throws InsightsCustomException, JMSException {
+
+		return AWSSQSProvider.getConnectionFactory().createConnection();
+
 	}
 
 	public static AmazonSQSMessagingClientWrapper getSQSClient(SQSConnection connection)
-			throws InsightsCustomException {
+			throws InsightsCustomException, JMSException {
 
 		return connection.getWrappedAmazonSQSClient();
 
 	}
 
 	public static void createSQSQueue(String queueName, AmazonSQSMessagingClientWrapper sqsClientWarrper)
-			throws InsightsCustomException {
+			throws InsightsCustomException, JMSException {
 
 		Map<QueueAttributeName, String> queueAttributes = new HashMap<>();
 		queueAttributes.put(QueueAttributeName.FIFO_QUEUE, "true");
@@ -112,62 +111,53 @@ public class AWSSQSProvider {
 			CreateQueueRequest cqr = CreateQueueRequest.builder().queueName(queueName).attributes(queueAttributes)
 					.build();
 			sqsClientWarrper.createQueue(cqr);
-		} catch (SqsException | javax.jms.JMSException e) {
+		} catch (SqsException e) {
 			log.error(e);
 		}
 
 	}
 
-	public static void declareDeadLetterExchange() throws jakarta.jms.JMSException, InsightsCustomException {
-		try {
-			SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
-			AmazonSQSMessagingClientWrapper client = AWSSQSProvider.getSQSClient(connection);
-			String queueName = MQMessageConstants.RECOVER_QUEUE +  MQMessageConstants.FIFO_EXTENSION;
-			if (!client.queueExists(queueName))
-				AWSSQSProvider.createSQSQueue(queueName, client);
-		} catch (javax.jms.JMSException e) {
-			throw new jakarta.jms.JMSException(e.getMessage());
-		}
+	public static void declareDeadLetterExchange() throws JMSException, InsightsCustomException {
+
+		SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
+		AmazonSQSMessagingClientWrapper client = AWSSQSProvider.getSQSClient(connection);
+		String queueName = MQMessageConstants.RECOVER_QUEUE +  MQMessageConstants.FIFO_EXTENSION;
+		if (!client.queueExists(queueName))
+			AWSSQSProvider.createSQSQueue(queueName, client);
 	}
 
-	public static void publish(String routingKey, String data) throws InsightsCustomException, jakarta.jms.JMSException {
-		try {
-			SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
-			AmazonSQSMessagingClientWrapper client = AWSSQSProvider.getSQSClient(connection);
-			Session session = connection.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
-			String queueName = routingKey.replace(".", "_") +  MQMessageConstants.FIFO_EXTENSION;
-			if (!client.queueExists(queueName))
-				AWSSQSProvider.createSQSQueue(queueName, client);
+	public static void publish(String routingKey, String data) throws InsightsCustomException, JMSException {
 
-			Queue queue = session.createQueue(queueName);
-			MessageProducer producer = session.createProducer(queue);
-			TextMessage message = session.createTextMessage(data);
-			message.setStringProperty("JMSXGroupID", routingKey);
-			producer.send(message);
-		} catch (javax.jms.JMSException e) {
-			throw new jakarta.jms.JMSException(e.getMessage());
-		}
+		SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
+		AmazonSQSMessagingClientWrapper client = AWSSQSProvider.getSQSClient(connection);
+		Session session = connection.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
+		String queueName = routingKey.replace(".", "_") +  MQMessageConstants.FIFO_EXTENSION;
+		if (!client.queueExists(queueName))
+			AWSSQSProvider.createSQSQueue(queueName, client);
+		
+		Queue queue = session.createQueue(queueName);
+		MessageProducer producer = session.createProducer(queue);
+		TextMessage message = session.createTextMessage(data);
+		message.setStringProperty("JMSXGroupID", routingKey);
+		producer.send(message);
 	}
 	
-	public static void publishInDLQ(String routingKey, String data) throws InsightsCustomException, jakarta.jms.JMSException {
-		try {
-			SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
-			Session session = connection.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
-			String queueName =  MQMessageConstants.RECOVER_QUEUE +  MQMessageConstants.FIFO_EXTENSION;
+	public static void publishInDLQ(String routingKey, String data) throws InsightsCustomException, JMSException {
 
-			Queue queue = session.createQueue(queueName);
-			MessageProducer producer = session.createProducer(queue);
-			TextMessage dlqMessage = session.createTextMessage(data);
-			dlqMessage.setStringProperty("sourceQueue", routingKey);
-			dlqMessage.setStringProperty("JMSXGroupID", MQMessageConstants.RECOVER_ROUNTINGKEY_QUEUE);
-			producer.send(dlqMessage);
-		} catch (javax.jms.JMSException e) {
-			throw new jakarta.jms.JMSException(e.getMessage());
-		}
+		SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
+		Session session = connection.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
+		String queueName =  MQMessageConstants.RECOVER_QUEUE +  MQMessageConstants.FIFO_EXTENSION;
+		
+		Queue queue = session.createQueue(queueName);
+		MessageProducer producer = session.createProducer(queue);
+		TextMessage dlqMessage = session.createTextMessage(data);
+		dlqMessage.setStringProperty("sourceQueue", routingKey);
+		dlqMessage.setStringProperty("JMSXGroupID", MQMessageConstants.RECOVER_ROUNTINGKEY_QUEUE);
+		producer.send(dlqMessage);
 	}
 
 	public static SQSConnection registerListner(String routingKey, MessageListener listner)
-			throws InsightsCustomException, jakarta.jms.JMSException {
+			throws InsightsCustomException, JMSException {
 
 		SQSConnection connectionSession = AWSSQSProvider.getSQSConnectionFromFactory();
 		AmazonSQSMessagingClientWrapper sqsClientJMSWapper = AWSSQSProvider.getSQSClient(connectionSession);
@@ -181,15 +171,11 @@ public class AWSSQSProvider {
 			AWSSQSProvider.createSQSQueue(queueName, sqsClientJMSWapper);
 		}
 
-		try {
-			Session session = connectionSession.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
+		Session session = connectionSession.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
 
-			Queue queue = session.createQueue(queueName);
-			MessageConsumer consumer = session.createConsumer(queue);
-			consumer.setMessageListener(listner);
-		} catch (javax.jms.JMSException e) {
-			throw new jakarta.jms.JMSException(e.getMessage());
-		}
+		Queue queue = session.createQueue(queueName);
+		MessageConsumer consumer = session.createConsumer(queue);
+		consumer.setMessageListener(listner);
 
 		return connectionSession;
 	}

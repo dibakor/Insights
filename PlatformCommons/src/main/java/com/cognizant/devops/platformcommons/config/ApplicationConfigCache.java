@@ -92,7 +92,7 @@ public class ApplicationConfigCache {
 	 */
 	public static boolean loadConfigCache() throws InsightsCustomException {
 
-		JsonObject serverConfigJsonfromStorage =  new JsonObject();
+		JsonObject serverConfigJsonfromStorage = new JsonObject();
 		JsonObject serverConfigJsonfromVault = new JsonObject();
 		Gson gson = new Gson();
 		try {

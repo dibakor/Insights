@@ -18,7 +18,7 @@ package com.cognizant.devops.platformservice.rest.grafana;
 import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-import jakarta.jms.JMSException;
+import javax.jms.JMSException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -269,7 +269,7 @@ public class DataArchivalServiceImpl implements DataArchivalService {
 	 * @throws JMSException
 	 */
 	public void publishDataArchivalDetails(String routingKey, String publishDataJson)
-			throws IOException, TimeoutException, InsightsCustomException, jakarta.jms.JMSException {
+			throws IOException, TimeoutException, InsightsCustomException, JMSException {
 		String queueName = routingKey.replace(".", "_");
 		if (ApplicationConfigProvider.getInstance().getMessageQueue().getProviderName().equalsIgnoreCase("AWSSQS"))
 			AWSSQSProvider.publish(queueName, publishDataJson);

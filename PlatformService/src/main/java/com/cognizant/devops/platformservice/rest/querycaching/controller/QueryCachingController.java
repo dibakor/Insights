@@ -17,7 +17,7 @@ package com.cognizant.devops.platformservice.rest.querycaching.controller;
 
 import java.util.stream.Collectors;
 
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

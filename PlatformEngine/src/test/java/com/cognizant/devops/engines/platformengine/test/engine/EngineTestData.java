@@ -117,22 +117,19 @@ public class EngineTestData {
 	}
 	
 	public static void publishSQSMessage(String routingKey, String data) throws InsightsCustomException, JMSException {
-		try {
-			SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
-			AmazonSQSMessagingClientWrapper client = AWSSQSProvider.getSQSClient(connection);
-			Session session = connection.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
-			String queueName = routingKey.replace(".", "_") + MQMessageConstants.FIFO_EXTENSION;
-			if (!client.queueExists(queueName)) {
-				AWSSQSProvider.createSQSQueue(queueName, client);
-			}
-			Queue queue = session.createQueue(queueName);
-			MessageProducer producer = session.createProducer(queue);
-			TextMessage message = session.createTextMessage(data);
-			message.setStringProperty("JMSXGroupID", routingKey);
-			producer.send(message);
-		} catch (jakarta.jms.JMSException e) {
-			throw new JMSException(e.getMessage());
+
+		SQSConnection connection = AWSSQSProvider.getSQSConnectionFromFactory();
+		AmazonSQSMessagingClientWrapper client = AWSSQSProvider.getSQSClient(connection);
+		Session session = connection.createSession(false, SQSSession.UNORDERED_ACKNOWLEDGE);
+		String queueName = routingKey.replace(".", "_") + MQMessageConstants.FIFO_EXTENSION;
+		if (!client.queueExists(queueName)) {
+			AWSSQSProvider.createSQSQueue(queueName, client);
 		}
+		Queue queue = session.createQueue(queueName);
+		MessageProducer producer = session.createProducer(queue);
+		TextMessage message = session.createTextMessage(data);
+		message.setStringProperty("JMSXGroupID", routingKey);
+		producer.send(message);
 	}
 	
 	public static boolean isQueueExists(String routingKey) {
