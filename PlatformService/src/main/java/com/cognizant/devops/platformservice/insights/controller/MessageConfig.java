@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2017 Cognizant Technology Solutions
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy
  * of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
@@ -15,10 +15,17 @@
  ******************************************************************************/
 package com.cognizant.devops.platformservice.insights.controller;
 
+import java.util.List;
+
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.GsonHttpMessageConverter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 @EnableWebMvc
 @Configuration
@@ -28,5 +35,15 @@ public class MessageConfig implements WebMvcConfigurer {
 	public void addCorsMappings(CorsRegistry registry) {
 		registry.addMapping("/**").allowedOrigins("*").allowedMethods("POST", "GET", "PUT", "OPTIONS", "DELETE")
 				.allowedHeaders("XSRF-TOKEN", "X-XSRF-TOKEN", "X-Auth-Token", "Content-Type");
+	}
+
+	@Override
+	public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+		GsonHttpMessageConverter gsonConverter = new GsonHttpMessageConverter();
+		Gson gson = new GsonBuilder()
+				.serializeNulls()
+				.create();
+		gsonConverter.setGson(gson);
+		converters.add(gsonConverter);
 	}
 }

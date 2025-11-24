@@ -88,7 +88,7 @@ public class InsightsSecurityConfigurationAdapter  {
 
 			http.securityMatcher("/user/authenticate/**")
 				.csrf(AbstractHttpConfigurer::disable)
-				.cors(AbstractHttpConfigurer::disable)
+				.cors(Customizer.withDefaults())
 				.addFilterBefore(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
 				.addFilterAfter(new InsightsCrossScriptingFilter(), InsightsCustomCsrfFilter.class)
 				.addFilterAfter(insightsInitialProcessingFilter(), InsightsCrossScriptingFilter.class)
@@ -111,7 +111,7 @@ public class InsightsSecurityConfigurationAdapter  {
 
 			http.securityMatcher("/externalApi/**")
 				.csrf(AbstractHttpConfigurer::disable)
-				.cors(AbstractHttpConfigurer::disable)
+				.cors(Customizer.withDefaults())
 				.addFilterBefore(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
 				.addFilterAfter(new InsightsCrossScriptingFilter(), InsightsCustomCsrfFilter.class)
 				.addFilterAfter(insightsExternalProcessingFilter(), InsightsCrossScriptingFilter.class)
