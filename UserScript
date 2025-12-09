@@ -1,0 +1,143 @@
+import requests
+from neo4j import GraphDatabase
+import os
+from requests.auth import HTTPBasicAuth
+import time
+
+# Configuration
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "your_neo4j_password"
+
+JIRA_BASE_URL = "https://your-jira-instance.atlassian.net"
+JIRA_USERNAME = "your_jira_email@example.com"
+JIRA_API_TOKEN = "your_jira_api_token"
+
+class JiraUserMapper:
+    def __init__(self, neo4j_uri, neo4j_user, neo4j_password, jira_base_url, jira_username, jira_token):
+        self.driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+        self.jira_base_url = jira_base_url
+        self.jira_auth = HTTPBasicAuth(jira_username, jira_token)
+        
+    def close(self):
+        self.driver.close()
+    
+    def get_distinct_authors(self):
+        """Fetch distinct author values from JIRA_WORKLOG nodes"""
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (w:JIRA_WORKLOG)
+                WHERE w.author IS NOT NULL
+                RETURN DISTINCT w.author AS author
+            """)
+            authors = [record["author"] for record in result]
+            print(f"Found {len(authors)} distinct authors in JIRA_WORKLOG nodes")
+            return authors
+    
+    def get_user_from_jira(self, user_key):
+        """Fetch user details from Jira API using user key"""
+        # Skip anonymized users
+        if user_key.startswith("JIRAUSER") and user_key[8:].isdigit():
+            print(f"  Skipping anonymized user: {user_key}")
+            return {
+                "userKey": user_key,
+                "username": "anonymized_user",
+                "displayName": "Anonymized User"
+            }
+        
+        try:
+            # Try getting user by key
+            url = f"{self.jira_base_url}/rest/api/2/user?key={user_key}"
+            response = requests.get(url, auth=self.jira_auth, timeout=10)
+            
+            if response.status_code == 200:
+                user_data = response.json()
+                return {
+                    "userKey": user_data.get("key", user_key),
+                    "username": user_data.get("name", user_key),
+                    "displayName": user_data.get("displayName", user_key)
+                }
+            elif response.status_code == 404:
+                print(f"  User not found: {user_key}")
+                return {
+                    "userKey": user_key,
+                    "username": "unknown_user",
+                    "displayName": "Unknown User"
+                }
+            else:
+                print(f"  Error fetching user {user_key}: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"  Exception fetching user {user_key}: {str(e)}")
+            return None
+    
+    def create_user_mapping_node(self, user_data):
+        """Create USER_MAPPING node in Neo4j"""
+        with self.driver.session() as session:
+            session.run("""
+                MERGE (u:USER_MAPPING {userKey: $userKey})
+                SET u.username = $username,
+                    u.displayName = $displayName,
+                    u.lastUpdated = datetime()
+            """, 
+            userKey=user_data["userKey"],
+            username=user_data["username"],
+            displayName=user_data["displayName"])
+    
+    def process_all_authors(self):
+        """Main process: fetch authors, query Jira, create nodes"""
+        authors = self.get_distinct_authors()
+        
+        total = len(authors)
+        processed = 0
+        skipped = 0
+        failed = 0
+        
+        print(f"\nProcessing {total} authors...")
+        
+        for idx, author in enumerate(authors, 1):
+            print(f"\n[{idx}/{total}] Processing author: {author}")
+            
+            # Get user details from Jira
+            user_data = self.get_user_from_jira(author)
+            
+            if user_data:
+                # Create node in Neo4j
+                self.create_user_mapping_node(user_data)
+                processed += 1
+                print(f"  ✓ Created USER_MAPPING node for {user_data['displayName']}")
+            else:
+                failed += 1
+                print(f"  ✗ Failed to process author: {author}")
+            
+            # Rate limiting - be nice to Jira API
+            if idx % 10 == 0:
+                print(f"\n--- Processed {idx}/{total} authors. Pausing for 2 seconds... ---")
+                time.sleep(2)
+        
+        print(f"\n{'='*60}")
+        print(f"Processing Complete!")
+        print(f"{'='*60}")
+        print(f"Total authors: {total}")
+        print(f"Successfully processed: {processed}")
+        print(f"Failed: {failed}")
+        print(f"{'='*60}")
+
+def main():
+    mapper = JiraUserMapper(
+        neo4j_uri=NEO4J_URI,
+        neo4j_user=NEO4J_USER,
+        neo4j_password=NEO4J_PASSWORD,
+        jira_base_url=JIRA_BASE_URL,
+        jira_username=JIRA_USERNAME,
+        jira_token=JIRA_API_TOKEN
+    )
+    
+    try:
+        mapper.process_all_authors()
+    finally:
+        mapper.close()
+
+if __name__ == "__main__":
+    main()
