@@ -18,9 +18,11 @@ package com.cognizant.devops.platformservice.security.config.grafana;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -93,6 +95,16 @@ public class InsightsGrafanaAuthenticationFilter extends AbstractAuthenticationP
 		authResult.getAuthorities()
 				.forEach(b -> log.debug(
 						"In successfulAuthentication InsightsGrafanaAuthenticationFilter GrantedAuthority for user "));
+
+		// Generate and set CSRF token cookie after successful authentication
+		String csrfToken = UUID.randomUUID().toString();
+		Cookie csrfCookie = new Cookie(AuthenticationUtils.CSRF_COOKIE_NAME, csrfToken);
+		csrfCookie.setPath("/");
+		csrfCookie.setHttpOnly(false); // Allow JavaScript to read the cookie
+		csrfCookie.setSecure(request.isSecure());
+		response.addCookie(csrfCookie);
+		log.debug("CSRF token cookie set after successful authentication");
+
 		chain.doFilter(request, response);
 	}
 
