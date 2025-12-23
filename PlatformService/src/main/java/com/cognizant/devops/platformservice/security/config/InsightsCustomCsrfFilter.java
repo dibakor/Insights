@@ -41,8 +41,9 @@ public class InsightsCustomCsrfFilter extends OncePerRequestFilter {
 	
 
 	/**
-	 * Filter used to extract CSRF token and add it in response header
-	 *
+	 * Filter used to extract CSRF token and add it in response header.
+	 * In Spring Security 6, CSRF tokens are deferred by default.
+	 * This filter forces the token to be loaded by calling getToken().
 	 */
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -52,21 +53,32 @@ public class InsightsCustomCsrfFilter extends OncePerRequestFilter {
 			updateLogInformation(request);
 			log.debug(" Inside Filter == CustomCsrfFilter token ........ {} method {} ", request.getRequestURL(),
 					request.getMethod());
-			
+
+			// Try to get CSRF token from request attribute (Spring Security 6 compatible)
 			CsrfToken csrf = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+			if (csrf == null) {
+				// Also try the default attribute name used by Spring Security
+				csrf = (CsrfToken) request.getAttribute("_csrf");
+			}
+
 			if (csrf != null) {
-				Cookie cookie = WebUtils.getCookie(request, AuthenticationUtils.CSRF_COOKIE_NAME);
+				// IMPORTANT: In Spring Security 6, calling getToken() forces the deferred token to load
 				String token = csrf.getToken();
-				if (cookie == null || token != null && !token.equals(cookie.getValue())) {
-					cookie = new Cookie(AuthenticationUtils.CSRF_COOKIE_NAME, token);
-					cookie.setPath("/");
-					response.addCookie(cookie);
+				log.debug("CSRF token loaded: {}", token != null ? "present" : "null");
+
+				if (token != null) {
+					Cookie cookie = WebUtils.getCookie(request, AuthenticationUtils.CSRF_COOKIE_NAME);
+					if (cookie == null || !token.equals(cookie.getValue())) {
+						cookie = new Cookie(AuthenticationUtils.CSRF_COOKIE_NAME, token);
+						cookie.setPath("/");
+						response.addCookie(cookie);
+						log.debug("CSRF cookie set with token");
+					}
 				}
 			} else {
-				log.error(" csrf token is empty for url {}  ", request.getRequestURL());
+				log.debug("CSRF token not available for url {} (may be ignored endpoint)", request.getRequestURL());
 			}
-			
-			
+
 			filterChain.doFilter(request, response);
 		} catch (Exception e) {
 			log.error(e);

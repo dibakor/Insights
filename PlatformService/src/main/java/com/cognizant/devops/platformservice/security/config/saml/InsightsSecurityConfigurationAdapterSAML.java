@@ -120,7 +120,8 @@ public class InsightsSecurityConfigurationAdapterSAML {
 
 			http.csrf(csrf -> csrf
 				.ignoringRequestMatchers(AuthenticationUtils.CSRF_IGNORE.toArray(new String[0]))
-				.csrfTokenRepository(authenticationUtils.csrfTokenRepository()));
+				.csrfTokenRepository(authenticationUtils.csrfTokenRepository())
+				.csrfTokenRequestHandler(authenticationUtils.csrfTokenRequestHandler()));
 
 			http.headers(headers -> headers
 				.contentSecurityPolicy(csp -> csp.policyDirectives("script-src 'self'")));
@@ -129,7 +130,9 @@ public class InsightsSecurityConfigurationAdapterSAML {
 			http.saml2Logout(Customizer.withDefaults());
 
 			// Add custom security filters
+			// InsightsCustomCsrfFilter runs AFTER CsrfFilter to force token loading and set cookie
 			http.addFilterBefore(new InsightsCrossScriptingFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
 				.addFilterAfter(insightsServiceProcessingFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
 				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.header.HeaderWriterFilter.class);
 

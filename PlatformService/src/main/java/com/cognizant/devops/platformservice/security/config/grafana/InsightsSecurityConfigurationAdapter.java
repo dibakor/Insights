@@ -139,7 +139,8 @@ public class InsightsSecurityConfigurationAdapter  {
 
 			http.csrf(csrf -> csrf
 				.ignoringRequestMatchers(AuthenticationUtils.CSRF_IGNORE.toArray(new String[0]))
-				.csrfTokenRepository(authenticationUtils.csrfTokenRepository()));
+				.csrfTokenRepository(authenticationUtils.csrfTokenRepository())
+				.csrfTokenRequestHandler(authenticationUtils.csrfTokenRequestHandler()));
 
 			http.exceptionHandling(exceptions -> exceptions.accessDeniedHandler(springAccessDeniedHandler));
 			http.headers(headers -> headers
@@ -148,7 +149,9 @@ public class InsightsSecurityConfigurationAdapter  {
 				.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin));
 
 			// Add custom security filters
+			// InsightsCustomCsrfFilter runs AFTER CsrfFilter to force token loading and set cookie
 			http.addFilterBefore(new InsightsCrossScriptingFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
 				.addFilterAfter(insightsProcessingFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
 				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.header.HeaderWriterFilter.class);
 
@@ -212,6 +215,8 @@ public class InsightsSecurityConfigurationAdapter  {
 
 	/**
 	 * Configure CORS for Spring Security 6
+	 * Note: CORS is already configured in CommonBeanConfiguration,
+	 * this method is kept for reference but should remain commented to avoid duplicate beans
 	 */
 	//@Bean
 	public CorsConfigurationSource corsConfigurationSource() {

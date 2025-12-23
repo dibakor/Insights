@@ -133,12 +133,15 @@ public class InsightsSecurityConfigurationAdapterJWT {
 
 			http.csrf(csrf -> csrf
 				.ignoringRequestMatchers(AuthenticationUtils.CSRF_IGNORE.toArray(new String[0]))
-				.csrfTokenRepository(authenticationUtils.csrfTokenRepository()));
+				.csrfTokenRepository(authenticationUtils.csrfTokenRepository())
+				.csrfTokenRequestHandler(authenticationUtils.csrfTokenRequestHandler()));
 
 			http.exceptionHandling(exceptions -> exceptions.accessDeniedHandler(springAccessDeniedHandler));
 
 			// Add custom security filters
+			// InsightsCustomCsrfFilter runs AFTER CsrfFilter to force token loading and set cookie
 			http.addFilterBefore(new InsightsCrossScriptingFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
+				.addFilterAfter(new InsightsCustomCsrfFilter(), org.springframework.security.web.csrf.CsrfFilter.class)
 				.addFilterAfter(insightsJWTProcessingFilter(), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
 				.addFilterAfter(new InsightsResponseHeaderWriterFilter(), org.springframework.security.web.header.HeaderWriterFilter.class);
 

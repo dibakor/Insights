@@ -39,8 +39,9 @@ import org.springframework.security.access.AuthorizationServiceException;
 import org.springframework.security.authentication.AccountExpiredException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
-import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.stereotype.Component;
 
 import com.cognizant.devops.platformcommons.config.ApplicationConfigProvider;
@@ -189,9 +190,22 @@ public class AuthenticationUtils {
 	}
 
 	public CsrfTokenRepository csrfTokenRepository() {
-		HttpSessionCsrfTokenRepository repository = new HttpSessionCsrfTokenRepository();
+		CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+		repository.setCookieName(AuthenticationUtils.CSRF_COOKIE_NAME);
 		repository.setHeaderName(AuthenticationUtils.CSRF_COOKIE_NAME);
 		return repository;
+	}
+
+	/**
+	 * Creates a CSRF token request handler for Spring Security 6.
+	 * This handler ensures the CSRF token is always loaded (not deferred),
+	 * which is required for SPAs where the token must be available in a cookie.
+	 */
+	public CsrfTokenRequestAttributeHandler csrfTokenRequestHandler() {
+		CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
+		// Setting to null disables deferred loading - token is loaded immediately
+		requestHandler.setCsrfRequestAttributeName(null);
+		return requestHandler;
 	}
 
 	public static List<SecurityFilterChain> getSecurityFilterchains() {
