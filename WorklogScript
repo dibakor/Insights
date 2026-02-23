@@ -6,7 +6,7 @@ import time
 INPUT_FILE = "input.xlsx"
 OUTPUT_FILE = "output_with_apiHrs.xlsx"
 
-BASE_URL = "https://jira.fyiblue.com/rest/tempo-timesheet/4/worklogs"
+BASE_URL = "https://jira.fxyz.com/rest/tempo-timesheet/4/worklogs"
 
 # Use Tempo/Jira API token
 API_TOKEN = "YOUR_API_TOKEN_HERE"
