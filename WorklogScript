@@ -1,0 +1,85 @@
+import pandas as pd
+import requests
+import time
+
+# ---------------- CONFIG ----------------
+INPUT_FILE = "input.xlsx"
+OUTPUT_FILE = "output_with_apiHrs.xlsx"
+
+BASE_URL = "https://jira.fyiblue.com/rest/tempo-timesheet/4/worklogs"
+
+# Use Tempo/Jira API token
+API_TOKEN = "YOUR_API_TOKEN_HERE"
+
+HEADERS = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "Accept": "application/json"
+}
+# ----------------------------------------
+
+
+def fetch_ai_benefit(worklog_id):
+    """
+    Calls Tempo API and extracts AIBenefit(Hrs) value.
+    Returns float or None.
+    """
+    url = f"{BASE_URL}/{worklog_id}"
+
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=15)
+
+        if response.status_code != 200:
+            print(f"Failed for {worklog_id} : {response.status_code}")
+            return None
+
+        data = response.json()
+
+        # Navigate safely through JSON
+        attributes = data.get("attributes", {})
+        ai_attr = attributes.get("_AIBenefit(Hrs)_", {})
+
+        value = ai_attr.get("value")
+
+        if value is not None:
+            return float(value)
+
+        return None
+
+    except Exception as e:
+        print(f"Error for {worklog_id}: {e}")
+        return None
+
+
+def main():
+
+    print("Reading Excel...")
+    df = pd.read_excel(INPUT_FILE)
+
+    # Ensure column exists
+    if "n.worklogId" not in df.columns:
+        raise Exception("Column 'n.worklogId' not found")
+
+    api_hours = []
+
+    print("Fetching data from Tempo API...")
+
+    for worklog_id in df["n.worklogId"]:
+        print(f"Processing worklogId = {worklog_id}")
+
+        hrs = fetch_ai_benefit(worklog_id)
+        api_hours.append(hrs)
+
+        # small delay to avoid API throttling
+        time.sleep(0.2)
+
+    # Add new column
+    df["apiHrs"] = api_hours
+
+    print("Saving output file...")
+    df.to_excel(OUTPUT_FILE, index=False)
+
+    print("✅ Done.")
+
+
+if __name__ == "__main__":
+    main()
