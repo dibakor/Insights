@@ -1,0 +1,15 @@
+{
+  "grafana_url": "https://grafana.example.com",
+  "grafana_user": "admin",
+  "grafana_password": "your_password_here",
+  "functions_to_replace": [
+    {
+      "old": "com.hcsc.htec.insights.parse(",
+      "new": "apoc.date.parse("
+    },
+    {
+      "old": "com.hcsc.htec.insights.format(",
+      "new": "apoc.date.format("
+    }
+  ]
+}

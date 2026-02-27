@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+"""
+Grafana Function Replacement Script
+
+Connects to Grafana and replaces specified functions in panel queries
+and template variables across all dashboards.
+
+Usage:
+    python grafana_replace_functions.py [--dry-run] [--verbose]
+"""
+
+import argparse
+import csv
+import json
+import os
+import sys
+import requests
+from typing import Any, Dict, List, Tuple
+
+
+def load_config() -> Dict[str, Any]:
+    """Load configuration from config.json in the same directory as the script."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "config.json")
+    
+    if not os.path.exists(config_path):
+        print(f"Error: config.json not found at {config_path}")
+        sys.exit(1)
+    
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+
+def get_auth(config: Dict[str, str]) -> Tuple[str, str]:
+    """Get Basic Auth tuple from config."""
+    return (config["grafana_user"], config["grafana_password"])
+
+
+def get_headers() -> Dict[str, str]:
+    """Get HTTP headers for API requests."""
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+
+def get_all_dashboards(grafana_url: str, auth: Tuple[str, str], headers: Dict[str, str]) -> List[Dict[str, str]]:
+    """Fetch all dashboards from Grafana."""
+    endpoint = f"{grafana_url}/api/search?type=dash-db"
+    response = requests.get(endpoint, auth=auth, headers=headers, verify=False)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_dashboard(grafana_url: str, uid: str, auth: Tuple[str, str], headers: Dict[str, str]) -> Dict[str, Any]:
+    """Fetch a single dashboard by UID."""
+    endpoint = f"{grafana_url}/api/dashboards/uid/{uid}"
+    response = requests.get(endpoint, auth=auth, headers=headers, verify=False)
+    response.raise_for_status()
+    return response.json()
+
+
+def update_dashboard(grafana_url: str, dashboard: Dict[str, Any], auth: Tuple[str, str], headers: Dict[str, str]) -> Dict[str, Any]:
+    """Update a dashboard in Grafana."""
+    endpoint = f"{grafana_url}/api/dashboards/db"
+    
+    payload = {
+        "dashboard": dashboard["dashboard"],
+        "message": "Updated via Grafana Function Replacement Script",
+        "overwrite": True
+    }
+    
+    if "meta" in dashboard:
+        if "folderId" in dashboard["meta"]:
+            payload["folderId"] = dashboard["meta"]["folderId"]
+        if "folderUid" in dashboard["meta"]:
+            payload["folderUid"] = dashboard["meta"]["folderUid"]
+    
+    response = requests.post(endpoint, json=payload, auth=auth, headers=headers, verify=False)
+    response.raise_for_status()
+    return response.json()
+
+
+def find_and_replace_in_text(text: str, functions: List[Dict[str, str]]) -> Tuple[str, List[Dict[str, str]]]:
+    """
+    Find and replace function names in text.
+    Returns (modified_text, list_of_replacements_made).
+    """
+    if not isinstance(text, str):
+        return text, []
+    
+    replacements_made = []
+    modified_text = text
+    
+    for func in functions:
+        old_fn = func["old"]
+        new_fn = func["new"]
+        
+        if old_fn in modified_text:
+            modified_text = modified_text.replace(old_fn, new_fn)
+            replacements_made.append({
+                "old": old_fn,
+                "new": new_fn,
+                "field": "text"
+            })
+    
+    return modified_text, replacements_made
+
+
+def replace_in_panels(panels: List[Dict[str, Any]], functions: List[Dict[str, str]], verbose: bool = False) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Recursively search and replace functions in panel queries.
+    Returns (modified_panels, list_of_changes).
+    """
+    if not panels:
+        return panels, []
+    
+    changes = []
+    modified_panels = []
+    
+    for panel in panels:
+        panel_changes = {}
+        modified_panel = panel.copy()
+        target_changes = []
+        
+        if "targets" in panel:
+            modified_targets = []
+            for target in panel["targets"]:
+                modified_target = target.copy()
+                
+                for field in ["query", "rawQuery", "expr"]:
+                    if field in modified_target and isinstance(modified_target[field], str):
+                        old_value = modified_target[field]
+                        new_value, replacements = find_and_replace_in_text(old_value, functions)
+                        if old_value != new_value:
+                            modified_target[field] = new_value
+                            target_changes.append({
+                                "field": field,
+                                "old": old_value,
+                                "new": new_value
+                            })
+                
+                modified_targets.append(modified_target)
+            
+            modified_panel["targets"] = modified_targets
+        
+        if target_changes:
+            panel_changes["targets"] = target_changes
+        
+        if "panels" in panel:
+            modified_sub_panels, sub_changes = replace_in_panels(panel["panels"], functions, verbose)
+            modified_panel["panels"] = modified_sub_panels
+            if sub_changes:
+                panel_changes["panels"] = sub_changes
+        
+        modified_panels.append(modified_panel)
+        
+        if panel_changes:
+            changes.append({
+                "panel_id": panel.get("id"),
+                "panel_title": panel.get("title"),
+                "changes": panel_changes
+            })
+    
+    return modified_panels, changes
+
+
+def replace_in_variables(variables: List[Dict[str, Any]], functions: List[Dict[str, str]], verbose: bool = False) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Search and replace functions in template variables.
+    Returns (modified_variables, list_of_changes).
+    """
+    if not variables:
+        return variables, []
+    
+    changes = []
+    modified_variables = []
+    
+    for var in variables:
+        modified_var = var.copy()
+        var_changes = []
+        
+        if "query" in var and isinstance(var["query"], str):
+            old_value = var["query"]
+            new_value, replacements = find_and_replace_in_text(old_value, functions)
+            if old_value != new_value:
+                modified_var["query"] = new_value
+                var_changes.append({
+                    "field": "query",
+                    "old": old_value,
+                    "new": new_value
+                })
+        
+        modified_variables.append(modified_var)
+        
+        if var_changes:
+            changes.append({
+                "variable_name": var.get("name"),
+                "changes": var_changes
+            })
+    
+    return modified_variables, changes
+
+
+def process_dashboard(
+    grafana_url: str,
+    dashboard_data: Dict[str, Any],
+    auth: Tuple[str, str],
+    headers: Dict[str, str],
+    functions: List[Dict[str, str]],
+    dry_run: bool = False,
+    verbose: bool = False
+) -> Dict[str, Any]:
+    """
+    Process a single dashboard: replace functions in panels and variables.
+    Returns a result dict with information about changes made.
+    """
+    dashboard = dashboard_data["dashboard"]
+    uid = dashboard.get("uid", "unknown")
+    title = dashboard.get("title", "Untitled")
+    
+    result = {
+        "uid": uid,
+        "title": title,
+        "panels_changed": False,
+        "variables_changed": False,
+        "panel_changes": [],
+        "variable_changes": [],
+        "updated": False
+    }
+    
+    panel_changes = []
+    variable_changes = []
+    
+    if "panels" in dashboard:
+        modified_panels, panel_changes = replace_in_panels(dashboard["panels"], functions, verbose)
+        if panel_changes:
+            dashboard["panels"] = modified_panels
+            result["panels_changed"] = True
+            result["panel_changes"] = panel_changes
+    
+    if "templating" in dashboard and "list" in dashboard["templating"]:
+        modified_variables, variable_changes = replace_in_variables(
+            dashboard["templating"]["list"], functions, verbose
+        )
+        if variable_changes:
+            dashboard["templating"]["list"] = modified_variables
+            result["variables_changed"] = True
+            result["variable_changes"] = variable_changes
+    
+    if result["panels_changed"] or result["variables_changed"]:
+        if dry_run:
+            if verbose:
+                print(f"[DRY-RUN] Would update dashboard: {title} (uid: {uid})")
+        else:
+            try:
+                response = update_dashboard(grafana_url, dashboard_data, auth, headers)
+                result["updated"] = True
+                if verbose:
+                    print(f"Updated dashboard: {title} (uid: {uid})")
+            except requests.exceptions.RequestException as e:
+                result["error"] = str(e)
+                print(f"Error updating dashboard {uid}: {e}")
+    
+    return result
+
+
+def print_changes(result: Dict[str, Any], verbose: bool = False) -> None:
+    """Print details of changes made to a dashboard."""
+    print(f"\nDashboard: {result['title']} (uid: {result['uid']})")
+    
+    if result["panel_changes"]:
+        print("  Panel changes:")
+        for panel_change in result["panel_changes"]:
+            print(f"    Panel: {panel_change.get('panel_title', 'Unknown')} (id: {panel_change.get('panel_id')})")
+            for change in panel_change.get("changes", {}).get("targets", []):
+                if isinstance(change, dict) and "old" in change:
+                    print(f"      {change['field']}:")
+                    print(f"        OLD: {change['old']}")
+                    print(f"        NEW: {change['new']}")
+    
+    if result["variable_changes"]:
+        print("  Variable changes:")
+        for var_change in result["variable_changes"]:
+            print(f"    Variable: {var_change.get('variable_name', 'Unknown')}")
+            for change in var_change.get("changes", []):
+                print(f"      {change['field']}:")
+                print(f"        OLD: {change['old']}")
+                print(f"        NEW: {change['new']}")
+    
+    if not result["panel_changes"] and not result["variable_changes"]:
+        print("  No changes needed.")
+
+
+def write_csv_report(results: List[Dict[str, Any]], filepath: str) -> None:
+    """Write a CSV report of all function replacements made across dashboards."""
+    fieldnames = [
+        "dashboard_uid", "dashboard_title",
+        "location_type",
+        "panel_id", "panel_title",
+        "variable_name",
+        "field", "old_value", "new_value"
+    ]
+
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for result in results:
+            uid = result["uid"]
+            title = result["title"]
+
+            for panel_change in result.get("panel_changes", []):
+                for change in panel_change.get("changes", {}).get("targets", []):
+                    writer.writerow({
+                        "dashboard_uid": uid,
+                        "dashboard_title": title,
+                        "location_type": "panel",
+                        "panel_id": panel_change.get("panel_id", ""),
+                        "panel_title": panel_change.get("panel_title", ""),
+                        "variable_name": "",
+                        "field": change.get("field", ""),
+                        "old_value": change.get("old", ""),
+                        "new_value": change.get("new", ""),
+                    })
+
+            for var_change in result.get("variable_changes", []):
+                for change in var_change.get("changes", []):
+                    writer.writerow({
+                        "dashboard_uid": uid,
+                        "dashboard_title": title,
+                        "location_type": "variable",
+                        "panel_id": "",
+                        "panel_title": "",
+                        "variable_name": var_change.get("variable_name", ""),
+                        "field": change.get("field", ""),
+                        "old_value": change.get("old", ""),
+                        "new_value": change.get("new", ""),
+                    })
+
+
+def main():
+    """Main execution function."""
+    parser = argparse.ArgumentParser(
+        description="Replace functions in Grafana dashboard panels and variables."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview changes without updating dashboards"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed output of replacements"
+    )
+    parser.add_argument(
+        "--report",
+        metavar="FILENAME",
+        help="Write a CSV report of all changes to FILENAME (e.g. changes.csv)"
+    )
+
+    args = parser.parse_args()
+    
+    config = load_config()
+    grafana_url = config["grafana_url"].rstrip("/")
+    auth = get_auth(config)
+    headers = get_headers()
+    functions = config.get("functions_to_replace", [])
+    
+    if not functions:
+        print("Error: No functions to replace specified in config.json")
+        sys.exit(1)
+    
+    print(f"Connecting to Grafana at {grafana_url}")
+    if args.dry_run:
+        print("Running in DRY-RUN mode - no changes will be made")
+    
+    try:
+        dashboards = get_all_dashboards(grafana_url, auth, headers)
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching dashboards: {e}")
+        sys.exit(1)
+    
+    print(f"Found {len(dashboards)} dashboards")
+    
+    total_modified = 0
+    results = []
+    
+    for dashboard_info in dashboards:
+        uid = dashboard_info.get("uid")
+        if not uid:
+            continue
+        
+        try:
+            dashboard_data = get_dashboard(grafana_url, uid, auth, headers)
+            result = process_dashboard(
+                grafana_url,
+                dashboard_data,
+                auth,
+                headers,
+                functions,
+                dry_run=args.dry_run,
+                verbose=args.verbose
+            )
+            results.append(result)
+            
+            if result["panels_changed"] or result["variables_changed"]:
+                total_modified += 1
+                if args.verbose:
+                    print_changes(result, verbose=True)
+                elif not args.dry_run:
+                    print(f"Updated: {result['title']} (uid: {uid})")
+                    
+        except requests.exceptions.RequestException as e:
+            print(f"Error processing dashboard {uid}: {e}")
+            continue
+    
+    print(f"\n{'='*50}")
+    print(f"Summary:")
+    print(f"  Total dashboards scanned: {len(results)}")
+    print(f"  Dashboards modified: {total_modified}")
+    if args.dry_run:
+        print(f"  (Dry-run mode - no actual changes made)")
+    print(f"{'='*50}")
+    
+    if args.dry_run and args.verbose:
+        print("\nDetailed changes:")
+        for result in results:
+            if result["panels_changed"] or result["variables_changed"]:
+                print_changes(result, verbose=True)
+
+    if args.report:
+        write_csv_report(results, args.report)
+        print(f"\nCSV report written to: {args.report}")
+
+
+if __name__ == "__main__":
+    main()
