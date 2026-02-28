@@ -131,7 +131,7 @@ def replace_in_panels(panels: List[Dict[str, Any]], functions: List[Dict[str, st
                 for field in ["query", "rawQuery", "expr"]:
                     if field in modified_target and isinstance(modified_target[field], str):
                         old_value = modified_target[field]
-                        new_value, replacements = find_and_replace_in_text(old_value, functions)
+                        new_value, _ = find_and_replace_in_text(old_value, functions)
                         if old_value != new_value:
                             modified_target[field] = new_value
                             target_changes.append({
@@ -165,7 +165,7 @@ def replace_in_panels(panels: List[Dict[str, Any]], functions: List[Dict[str, st
     return modified_panels, changes
 
 
-def replace_in_variables(variables: List[Dict[str, Any]], functions: List[Dict[str, str]], verbose: bool = False) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def replace_in_variables(variables: List[Dict[str, Any]], functions: List[Dict[str, str]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Search and replace functions in template variables.
     Returns (modified_variables, list_of_changes).
@@ -182,7 +182,7 @@ def replace_in_variables(variables: List[Dict[str, Any]], functions: List[Dict[s
         
         if "query" in var and isinstance(var["query"], str):
             old_value = var["query"]
-            new_value, replacements = find_and_replace_in_text(old_value, functions)
+            new_value, _ = find_and_replace_in_text(old_value, functions)
             if old_value != new_value:
                 modified_var["query"] = new_value
                 var_changes.append({
@@ -241,7 +241,7 @@ def process_dashboard(
     
     if "templating" in dashboard and "list" in dashboard["templating"]:
         modified_variables, variable_changes = replace_in_variables(
-            dashboard["templating"]["list"], functions, verbose
+            dashboard["templating"]["list"], functions
         )
         if variable_changes:
             dashboard["templating"]["list"] = modified_variables
@@ -250,17 +250,20 @@ def process_dashboard(
     
     if result["panels_changed"] or result["variables_changed"]:
         if dry_run:
-            if verbose:
-                print(f"[DRY-RUN] Would update dashboard: {title} (uid: {uid})")
+            print(f"  [DRY-RUN] Would update: {title} (uid: {uid})")
         else:
             try:
                 response = update_dashboard(grafana_url, dashboard_data, auth, headers)
-                result["updated"] = True
-                if verbose:
-                    print(f"Updated dashboard: {title} (uid: {uid})")
+                grafana_status = response.get("status", "unknown")
+                if grafana_status == "success":
+                    result["updated"] = True
+                    print(f"  [SUCCESS] Updated: {title} (uid: {uid})")
+                else:
+                    result["error"] = f"Unexpected status: {grafana_status}"
+                    print(f"  [WARN] Unexpected response for {title} (uid: {uid}): status={grafana_status}")
             except requests.exceptions.RequestException as e:
                 result["error"] = str(e)
-                print(f"Error updating dashboard {uid}: {e}")
+                print(f"  [FAILED] Could not update: {title} (uid: {uid}) — {e}")
     
     return result
 
@@ -382,8 +385,6 @@ def main():
             
             if result["panels_changed"] or result["variables_changed"]:
                 total_modified += 1
-                action = "Would update" if args.dry_run else "Updated"
-                print(f"  {action}: {result['title']} (uid: {uid})")
                     
         except requests.exceptions.RequestException as e:
             print(f"Error processing dashboard {uid}: {e}")
