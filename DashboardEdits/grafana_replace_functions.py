@@ -127,8 +127,12 @@ def replace_in_panels(panels: List[Dict[str, Any]], functions: List[Dict[str, st
             modified_targets = []
             for target in panel["targets"]:
                 modified_target = target.copy()
-                
-                for field in ["query", "rawQuery", "expr"]:
+
+                if verbose:
+                    string_fields = {k: v for k, v in target.items() if isinstance(v, str) and v.strip()}
+                    print(f"    [DEBUG] Panel '{panel.get('title')}' target string fields: {list(string_fields.keys())}")
+
+                for field in ["query", "rawQuery", "expr", "cypher", "cypherQuery", "statement", "queryText"]:
                     if field in modified_target and isinstance(modified_target[field], str):
                         old_value = modified_target[field]
                         new_value, _ = find_and_replace_in_text(old_value, functions)
@@ -139,7 +143,7 @@ def replace_in_panels(panels: List[Dict[str, Any]], functions: List[Dict[str, st
                                 "old": old_value,
                                 "new": new_value
                             })
-                
+
                 modified_targets.append(modified_target)
             
             modified_panel["targets"] = modified_targets
@@ -180,16 +184,27 @@ def replace_in_variables(variables: List[Dict[str, Any]], functions: List[Dict[s
         modified_var = var.copy()
         var_changes = []
         
-        if "query" in var and isinstance(var["query"], str):
-            old_value = var["query"]
+        if "query" in var:
+            if isinstance(var["query"], str):
+                old_value = var["query"]
+                new_value, _ = find_and_replace_in_text(old_value, functions)
+                if old_value != new_value:
+                    modified_var["query"] = new_value
+                    var_changes.append({"field": "query", "old": old_value, "new": new_value})
+
+            elif isinstance(var["query"], dict) and "query" in var["query"] and isinstance(var["query"]["query"], str):
+                old_value = var["query"]["query"]
+                new_value, _ = find_and_replace_in_text(old_value, functions)
+                if old_value != new_value:
+                    modified_var["query"] = {**var["query"], "query": new_value}
+                    var_changes.append({"field": "query.query", "old": old_value, "new": new_value})
+
+        if "definition" in var and isinstance(var["definition"], str):
+            old_value = var["definition"]
             new_value, _ = find_and_replace_in_text(old_value, functions)
             if old_value != new_value:
-                modified_var["query"] = new_value
-                var_changes.append({
-                    "field": "query",
-                    "old": old_value,
-                    "new": new_value
-                })
+                modified_var["definition"] = new_value
+                var_changes.append({"field": "definition", "old": old_value, "new": new_value})
         
         modified_variables.append(modified_var)
         
