@@ -265,32 +265,6 @@ def process_dashboard(
     return result
 
 
-def print_changes(result: Dict[str, Any], verbose: bool = False) -> None:
-    """Print details of changes made to a dashboard."""
-    print(f"\nDashboard: {result['title']} (uid: {result['uid']})")
-    
-    if result["panel_changes"]:
-        print("  Panel changes:")
-        for panel_change in result["panel_changes"]:
-            print(f"    Panel: {panel_change.get('panel_title', 'Unknown')} (id: {panel_change.get('panel_id')})")
-            for change in panel_change.get("changes", {}).get("targets", []):
-                if isinstance(change, dict) and "old" in change:
-                    print(f"      {change['field']}:")
-                    print(f"        OLD: {change['old']}")
-                    print(f"        NEW: {change['new']}")
-    
-    if result["variable_changes"]:
-        print("  Variable changes:")
-        for var_change in result["variable_changes"]:
-            print(f"    Variable: {var_change.get('variable_name', 'Unknown')}")
-            for change in var_change.get("changes", []):
-                print(f"      {change['field']}:")
-                print(f"        OLD: {change['old']}")
-                print(f"        NEW: {change['new']}")
-    
-    if not result["panel_changes"] and not result["variable_changes"]:
-        print("  No changes needed.")
-
 
 def write_csv_report(results: List[Dict[str, Any]], filepath: str) -> None:
     """Write a CSV report of all function replacements made across dashboards."""
@@ -357,7 +331,8 @@ def main():
     parser.add_argument(
         "--report",
         metavar="FILENAME",
-        help="Write a CSV report of all changes to FILENAME (e.g. changes.csv)"
+        default="grafana_changes_report.csv",
+        help="CSV report filename (default: grafana_changes_report.csv)"
     )
 
     args = parser.parse_args()
@@ -407,10 +382,8 @@ def main():
             
             if result["panels_changed"] or result["variables_changed"]:
                 total_modified += 1
-                if args.verbose:
-                    print_changes(result, verbose=True)
-                elif not args.dry_run:
-                    print(f"Updated: {result['title']} (uid: {uid})")
+                action = "Would update" if args.dry_run else "Updated"
+                print(f"  {action}: {result['title']} (uid: {uid})")
                     
         except requests.exceptions.RequestException as e:
             print(f"Error processing dashboard {uid}: {e}")
@@ -424,15 +397,8 @@ def main():
         print(f"  (Dry-run mode - no actual changes made)")
     print(f"{'='*50}")
     
-    if args.dry_run and args.verbose:
-        print("\nDetailed changes:")
-        for result in results:
-            if result["panels_changed"] or result["variables_changed"]:
-                print_changes(result, verbose=True)
-
-    if args.report:
-        write_csv_report(results, args.report)
-        print(f"\nCSV report written to: {args.report}")
+    write_csv_report(results, args.report)
+    print(f"\nCSV report written to: {args.report}")
 
 
 if __name__ == "__main__":
