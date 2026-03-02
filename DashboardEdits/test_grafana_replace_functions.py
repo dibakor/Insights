@@ -10,12 +10,17 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from unittest.mock import patch, MagicMock
+import requests
+
 from grafana_replace_functions import (
     find_and_replace_in_text,
     replace_in_panels,
     replace_in_variables,
     get_auth,
     get_headers,
+    get_all_orgs,
+    process_dashboard,
 )
 
 
@@ -403,20 +408,127 @@ class TestIntegration(unittest.TestCase):
         )
 
 
+class TestGetHeadersWithOrgId(unittest.TestCase):
+    """Test cases for get_headers with org_id parameter."""
+
+    def test_get_headers_no_org_id(self):
+        """No X-Grafana-Org-Id header when called without org_id."""
+        headers = get_headers()
+        self.assertNotIn("X-Grafana-Org-Id", headers)
+
+    def test_get_headers_with_org_id(self):
+        """X-Grafana-Org-Id header added as string when org_id is provided."""
+        headers = get_headers(org_id=2)
+        self.assertEqual(headers["X-Grafana-Org-Id"], "2")
+
+    def test_get_headers_org_id_is_string(self):
+        """int org_id is converted to string in the header."""
+        headers = get_headers(org_id=42)
+        self.assertEqual(headers["X-Grafana-Org-Id"], "42")
+
+
+class TestGetAllOrgs(unittest.TestCase):
+    """Test cases for get_all_orgs function."""
+
+    @patch("grafana_replace_functions.requests.get")
+    def test_returns_list_of_orgs(self, mock_get):
+        """Returns list of org dicts from /api/orgs."""
+        orgs_data = [{"id": 1, "name": "Main Org"}, {"id": 2, "name": "Team B"}]
+        mock_response = MagicMock()
+        mock_response.json.return_value = orgs_data
+        mock_get.return_value = mock_response
+
+        result = get_all_orgs("https://grafana.example.com", ("admin", "pass"))
+
+        self.assertEqual(result, orgs_data)
+        called_url = mock_get.call_args[0][0]
+        self.assertEqual(called_url, "https://grafana.example.com/api/orgs")
+
+    @patch("grafana_replace_functions.requests.get")
+    def test_raises_on_http_error(self, mock_get):
+        """Propagates HTTPError raised by raise_for_status."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("403 Forbidden")
+        mock_get.return_value = mock_response
+
+        with self.assertRaises(requests.exceptions.HTTPError):
+            get_all_orgs("https://grafana.example.com", ("admin", "pass"))
+
+    @patch("grafana_replace_functions.requests.get")
+    def test_no_org_id_header_sent(self, mock_get):
+        """Base headers (no X-Grafana-Org-Id) are used when calling /api/orgs."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = []
+        mock_get.return_value = mock_response
+
+        get_all_orgs("https://grafana.example.com", ("admin", "pass"))
+
+        sent_headers = mock_get.call_args[1]["headers"]
+        self.assertNotIn("X-Grafana-Org-Id", sent_headers)
+
+
+class TestMultiOrgIntegration(unittest.TestCase):
+    """Integration tests for multi-org fields in process_dashboard results."""
+
+    def setUp(self):
+        self.functions = [
+            {"old": "com.hcsc.htec.insights.parse(", "new": "apoc.date.parse("},
+        ]
+        self.dashboard_data = {
+            "dashboard": {
+                "uid": "dash-abc",
+                "title": "Sample Dashboard",
+                "panels": [],
+                "templating": {"list": []}
+            }
+        }
+
+    def test_result_contains_org_fields(self):
+        """process_dashboard result includes correct org_id and org_name."""
+        result = process_dashboard(
+            "https://grafana.example.com",
+            self.dashboard_data,
+            ("admin", "pass"),
+            get_headers(org_id=3),
+            self.functions,
+            dry_run=True,
+            org_id=3,
+            org_name="Team B"
+        )
+        self.assertEqual(result["org_id"], 3)
+        self.assertEqual(result["org_name"], "Team B")
+
+    def test_result_org_fields_default_to_none_and_empty(self):
+        """process_dashboard result defaults org_id to None and org_name to empty string."""
+        result = process_dashboard(
+            "https://grafana.example.com",
+            self.dashboard_data,
+            ("admin", "pass"),
+            get_headers(),
+            self.functions,
+            dry_run=True
+        )
+        self.assertIsNone(result["org_id"])
+        self.assertEqual(result["org_name"], "")
+
+
 def run_tests():
     """Run all tests and return results."""
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
-    
+
     suite.addTests(loader.loadTestsFromTestCase(TestFindAndReplaceInText))
     suite.addTests(loader.loadTestsFromTestCase(TestReplaceInPanels))
     suite.addTests(loader.loadTestsFromTestCase(TestReplaceInVariables))
     suite.addTests(loader.loadTestsFromTestCase(TestHelperFunctions))
     suite.addTests(loader.loadTestsFromTestCase(TestIntegration))
-    
+    suite.addTests(loader.loadTestsFromTestCase(TestGetHeadersWithOrgId))
+    suite.addTests(loader.loadTestsFromTestCase(TestGetAllOrgs))
+    suite.addTests(loader.loadTestsFromTestCase(TestMultiOrgIntegration))
+
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
-    
+
     return result.wasSuccessful()
 
 

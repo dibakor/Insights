@@ -1,0 +1,17 @@
+{
+  "host": "localhost",
+  "port": 5432,
+  "dbname": "your_database",
+  "user": "postgres",
+  "password": "your_password",
+  "functions_to_replace": [
+    {
+      "old": "com.hcsc.htec.insights.parse(",
+      "new": "apoc.date.parse("
+    },
+    {
+      "old": "com.hcsc.htec.insights.format(",
+      "new": "apoc.date.format("
+    }
+  ]
+}
