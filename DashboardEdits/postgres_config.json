@@ -16,11 +16,11 @@
   ],
   "regex_replacements": [
     {
-      "pattern": "(?i)not\\s+exists\\(([^)]+)\\)",
+      "pattern": "(?i)not\\s+exists\\(([a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)\\)",
       "replacement": "\\1 IS NULL"
     },
     {
-      "pattern": "exists\\(([^)]+)\\)",
+      "pattern": "exists\\(([a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)\\)",
       "replacement": "\\1 is not null"
     }
   ]
