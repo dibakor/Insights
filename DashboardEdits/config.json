@@ -11,5 +11,15 @@
       "old": "com.hcsc.htec.insights.format(",
       "new": "apoc.date.format("
     }
+  ],
+  "regex_replacements": [
+    {
+      "pattern": "(?i)not\\s+exists\\(([^)]+)\\)",
+      "replacement": "\\1 IS NULL"
+    },
+    {
+      "pattern": "exists\\(([^)]+)\\)",
+      "replacement": "\\1 is not null"
+    }
   ]
 }
