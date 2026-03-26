@@ -18,7 +18,7 @@
       "replacement": "\\1 IS NULL"
     },
     {
-      "pattern": "exists\\(([a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)\\)",
+      "pattern": "(?i)exists\\(([a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)\\)",
       "replacement": "\\1 is not null"
     }
   ]

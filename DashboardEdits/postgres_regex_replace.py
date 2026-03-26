@@ -90,19 +90,20 @@ def process_rows(
     # Fetch rows matching literal patterns via SQL LIKE
     rows = fetch_candidate_rows(conn, literal_replacements)
 
-    # Also fetch rows matching regex patterns using SQL ~ (POSIX regex)
+    # Also fetch rows matching regex patterns using SQL ~* (case-insensitive POSIX regex)
     if regex_replacements:
         import psycopg2.extras
 
         regex_clauses = " OR ".join(
-            f'"{COLUMN}" ~ %s' for _ in regex_replacements
+            f'"{COLUMN}" ~* %s' for _ in regex_replacements
         )
         sql = f"""
             SELECT {ID_COLUMN}, queryname, toolname, querygroup, "{COLUMN}"
             FROM {TABLE}
             WHERE {regex_clauses}
         """
-        params = [rule["pattern"] for rule in regex_replacements]
+        # Strip Python-specific (?i) flag — PostgreSQL uses ~* for case-insensitive matching
+        params = [re.sub(r'^\(\?i\)', '', rule["pattern"]) for rule in regex_replacements]
 
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
