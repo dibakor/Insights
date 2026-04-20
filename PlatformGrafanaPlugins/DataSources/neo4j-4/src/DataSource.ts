@@ -62,7 +62,7 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
     return getBackendSrv().datasourceRequest({ url: routePath, method: 'POST', data: testQuery }).then((res: any) => {
       let data = res.data;
       if (res.status === 200) {
-        if (data && data.results.length > 0) {
+        if (data && data.results && data.results.length > 0) {
           return { status: 'success', message: 'Data source is working' }
         } else {
           return { status: "failure", message: "No data returned", title: "failure" };
@@ -72,8 +72,10 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
       }
     }).catch((err: any) => {
       console.log(err);
-      if (err.data && err.data.errors[0].message) {
+      if (err.data && err.data.errors && err.data.errors[0] && err.data.errors[0].message) {
         return { status: 'error', message: err.data.errors[0].message };
+      } else if (err.data && err.data.message) {
+        return { status: 'error', message: err.data.message };
       } else {
         return { status: 'error', message: err.status };
       }
@@ -84,8 +86,8 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
     const queries: any[] = [];
     const streams: Array<Observable<DataQueryResponse>> = [];
     const { range } = options;
-    const from1 = range!.from.valueOf() / 1000;
-    const to = range!.to.valueOf() / 1000;
+    const from1 = range?.from ? range.from.valueOf() / 1000 : 0;
+    const to = range?.to ? range.to.valueOf() / 1000 : Date.now() / 1000;
     let cypherQuery = {};
     let statements = [] as any;
     let metadata = [] as any;
@@ -215,8 +217,8 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
     statements.push(statement);
     return new Promise<MetricFindValue[]>((resolve, reject) => {
       return getBackendSrv().datasourceRequest({ url: this.url, method: 'POST', data: cypherQuery }).then((res: any) => {
-        if (res.status === 200 && res.data.errors.length === 0) {
-          let result = res.data.results[0];
+        if (res.status === 200 && (!res.data.errors || res.data.errors.length === 0)) {
+          let result = res.data.results && res.data.results[0];
           if (result) {
             let data = result.data;
             if (data) {
@@ -230,8 +232,10 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
               return resolve(metrics);
             }
           }
+          return resolve([]);
         } else {
-          return reject(res.data.errors[0].message);
+          let errorMsg = res.data && res.data.errors && res.data.errors[0] ? res.data.errors[0].message : 'Unknown error';
+          return reject(errorMsg);
         }
       }).catch((err: any) => {
         console.log(err);
